@@ -1,0 +1,16 @@
+name: program
+version: 0.0.1
+ghc-options: -Wall -Werror
+executable:
+  main: Main.hs
+  source-dirs: src
+  dependencies:
+    - base
+    - containers
+    - directory
+    - lens
+    - network-transport-tcp
+    - non-empty
+    - semigroups
+    - text
+    - validation

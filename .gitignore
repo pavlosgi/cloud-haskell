@@ -1,0 +1,8 @@
+*.ghci
+.*.swp
+.*.swo
+.DS_Store
+.hdevtools.sock
+.stack-work/
+.tags
+.tags_sorted_by_file
