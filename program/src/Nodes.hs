@@ -4,6 +4,7 @@
 
 module Nodes where
 
+import Helpers
 import Types
 
 import qualified Control.Concurrent                        as C.C
@@ -14,28 +15,26 @@ import qualified Control.Monad                             as M
 import qualified Data.List                                 as L
 import           Data.Monoid                               ((<>))
 import qualified Data.Text                                 as Tx
-import qualified Data.Text.Encoding                        as Tx.E
-import qualified Data.Time.Clock.POSIX                     as T.C.POSIX
 import qualified Network.Transport.TCP                     as N.T.TCP
-import qualified Network.Transport                         as N.T
 import qualified System.Random                             as Sys.R
 
 import qualified Debug.Trace as D
-
-endpointToNodeId :: Endpoint -> D.P.NodeId
-endpointToNodeId e
-  = D.P.NodeId (N.T.EndPointAddress (Tx.E.encodeUtf8 $ (endpointToText e <> ":0")))
 
 startCoordinatorNode :: [D.P.ProcessId] -> Config -> Endpoint -> IO ()
 startCoordinatorNode pIds Config {..} endpoint
   = do
       node <- createNode endpoint
       D.P.N.runProcess node $ do
+        startTimestamp  <- IO.liftIO getCurrentMillis
+        let startMsg = Message StartWork startTimestamp
+        mapM_ (\e -> D.P.nsendRemote (endpointToNodeId e)
+          (Tx.unpack (endpointToText e)) startMsg) cNodeEndpoints
+
         D.traceShowM ("Waiting for " <> show (_secondsInt cSendFor))
         IO.liftIO $ C.C.threadDelay (secondsToMicroseconds cSendFor)
         D.traceShowM ("Sending StopWork" :: String)
-        timestamp  <- IO.liftIO $ round . (* 1000) <$> T.C.POSIX.getPOSIXTime
-        let msg = Message StopWork timestamp
+        stopTimestamp  <- IO.liftIO getCurrentMillis
+        let msg = Message StopWork stopTimestamp
         mapM_ (\e -> D.P.nsendRemote (endpointToNodeId e)
           (Tx.unpack (endpointToText e)) msg) cNodeEndpoints
 
@@ -51,9 +50,18 @@ startNode config endpoint
       D.P.N.forkProcess node $ do
         pid <- D.P.getSelfPid
         D.P.register (Tx.unpack $ endpointToText endpoint) pid
+        waitUntilStartMessage
         M.void $ runSender config
         res <- runReceiver []
         IO.liftIO (print res)
+
+   where
+     waitUntilStartMessage
+       = do
+           msg <- D.P.expect
+           case msg of
+             Message StartWork _ -> pure ()
+             Message _ _ -> waitUntilStartMessage
 
 runSender :: Config -> D.P.Process D.P.ProcessId
 runSender Config {..}
@@ -64,7 +72,7 @@ runSender Config {..}
   where
     runSender' endpoints rand
       = do
-          timestamp  <- IO.liftIO $ round . (* 1000) <$> T.C.POSIX.getPOSIXTime
+          timestamp  <- IO.liftIO getCurrentMillis
           let msg = Message (RandomNumber rand) timestamp
           mapM_ (\e -> D.P.nsendRemote (endpointToNodeId e)
             (Tx.unpack (endpointToText e)) msg) endpoints
@@ -85,6 +93,8 @@ runReceiver msgs
               total = foldl (\r (Message r' _) -> r + r') 0 msgs
 
           in pure (ordered, total)
+
+        Message _ _ -> runReceiver msgs
 
 createNode :: Endpoint -> IO D.P.N.LocalNode
 createNode endpoint@(Endpoint h p)

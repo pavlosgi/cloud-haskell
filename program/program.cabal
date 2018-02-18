@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 94afd96a8d931b4ac68b39a9fda14e34ffba6d632d3357c3c6fe06ff5f6d9db8
+-- hash: c13d115f531a090fe01b2dd1fcd22ac822912f43e86953230374e493a14629f7
 
 name:           program
 version:        0.0.1
@@ -32,6 +32,7 @@ executable program
     , validation
   other-modules:
       CliParser
+      Helpers
       Nodes
       Types
       Paths_program

@@ -1,13 +1,10 @@
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Types
   ( Config (..)
   , Endpoint (..)
-  , endpointToText
   , File (..)
   , Seconds (..)
-  , secondsToMicroseconds
   , Seed (..)
   , ConfigError (..)
   , NonEmptySet
@@ -16,7 +13,6 @@ module Types
   ) where
 
 import qualified Data.Binary      as B
-import           Data.Monoid      ((<>))
 import qualified Data.NonEmpty    as NE
 import qualified Data.Set         as Set
 import qualified Data.Text        as Tx
@@ -40,10 +36,6 @@ data Endpoint
 
   deriving (Eq, Ord, Show)
 
-endpointToText :: Endpoint -> Tx.Text
-endpointToText (Endpoint h p)
-  = h <> ":" <> Tx.pack (show p)
-
 newtype File
   = File { _fileText :: Tx.Text }
   deriving (Eq, Show)
@@ -51,10 +43,6 @@ newtype File
 newtype Seconds
   = Seconds { _secondsInt :: Int }
   deriving (Eq, Show)
-
-secondsToMicroseconds :: Seconds -> Int
-secondsToMicroseconds (Seconds s)
-  = s * 1000000
 
 newtype Seed
   = Seed { _seedInt :: Int }
@@ -85,6 +73,7 @@ instance B.Binary a => B.Binary (Message a)
 
 data Payload
   = RandomNumber !Double
+  | StartWork
   | StopWork
   deriving (Eq, Generic, Show)
 
