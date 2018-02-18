@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: c13d115f531a090fe01b2dd1fcd22ac822912f43e86953230374e493a14629f7
+-- hash: b4865392a06a634e73cb14c415a81a15b57635dee9ad70cd0527f82c28cf5807
 
 name:           program
 version:        0.0.1
@@ -29,6 +29,7 @@ executable program
     , semigroups
     , text
     , time
+    , uuid
     , validation
   other-modules:
       CliParser

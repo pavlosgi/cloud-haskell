@@ -13,24 +13,23 @@ import qualified Control.Distributed.Process.Node          as D.P.N
 import qualified Control.Monad.IO.Class                    as IO
 import qualified Control.Monad                             as M
 import qualified Data.List                                 as L
+import           Data.Maybe                                as Mb
 import           Data.Monoid                               ((<>))
 import qualified Data.Text                                 as Tx
 import qualified Network.Transport.TCP                     as N.T.TCP
 import qualified System.Random                             as Sys.R
 
-import qualified Debug.Trace as D
+type MessageSendPort
+  = D.P.SendPort Message
 
 type MessageReceivePort
-  = D.P.ReceivePort (Message Payload)
-
-type MessageSendPort
-  = D.P.SendPort (Message Payload)
+  = D.P.ReceivePort Message
 
 data NodeWithChannels
   = NodeWithChannels
       { nwcEndpoint    :: !Endpoint
-      , nwcSendPort    :: !(D.P.SendPort (Message Payload))
-      , nwcReceivePort :: !(D.P.ReceivePort (Message Payload))
+      , nwcSendPort    :: !MessageSendPort
+      , nwcReceivePort :: !MessageReceivePort
       }
 
 instance Eq NodeWithChannels where
@@ -63,19 +62,13 @@ startProgram config@Config {..}
         channels <- createNodeChannels cNodeEndpoints
         let sendPorts = nwcSendPort `mapSet` channels
         pIds <- IO.liftIO $ traverseSet (startNode config sendPorts) channels
-        startTimestamp  <- IO.liftIO getCurrentMillis
-        let startMsg = Message StartWork startTimestamp
+        startMsg <- IO.liftIO $ createMessage StartWork
         mapM_ (flip D.P.sendChan startMsg) sendPorts
-        D.traceShowM ("Waiting for " <> show (_secondsInt cSendFor))
         IO.liftIO $ C.C.threadDelay (secondsToMicroseconds cSendFor)
-        D.traceShowM ("Sending StopWork" :: String)
-        stopTimestamp  <- IO.liftIO getCurrentMillis
-        let stopMsg = Message StopWork stopTimestamp
+        stopMsg <- IO.liftIO $ createMessage StopWork
         mapM_ (flip D.P.sendChan stopMsg) sendPorts
-        D.traceShowM ("Waiting for " <> show (_secondsInt cWaitFor))
         IO.liftIO $ C.C.threadDelay (secondsToMicroseconds cWaitFor)
-        D.traceShowM ("Kill all" :: String)
-        mapM_ (flip D.P.kill "exit") pIds
+        mapM_ (flip D.P.kill "Grace period is over") pIds
 
 startNode
   :: Config
@@ -88,8 +81,8 @@ startNode config sendPorts (NodeWithChannels endpoint _ receivePort)
       node <- createNode endpoint
       D.P.N.forkProcess node $ do
         waitUntilStartMessage
-        M.void $ runSender config sendPorts
-        res <- runReceiver [] receivePort
+        senderPId <- runSender config sendPorts
+        res <- runReceiver [] receivePort senderPId
         IO.liftIO (print res)
 
    where
@@ -98,44 +91,69 @@ startNode config sendPorts (NodeWithChannels endpoint _ receivePort)
            msg <- D.P.receiveChan receivePort
            case msg of
              Message StartWork _ -> pure ()
-             Message _ _ -> waitUntilStartMessage
+             Message {} -> waitUntilStartMessage
 
-runSender :: Config -> NonEmptySet MessageSendPort -> D.P.Process D.P.ProcessId
+runSender
+  :: Config
+  -> NonEmptySet MessageSendPort
+  -> D.P.Process D.P.ProcessId
+
 runSender Config {..} sendPorts
   = D.P.spawnLocal $ do
-      let rands = Sys.R.randomRs (0.0 :: Double, 1) (Sys.R.mkStdGen (_seedInt cSeed))
+      let rands = Sys.R.randomRs (0.0 :: Double, 1)
+                    (Sys.R.mkStdGen (_seedInt cSeed))
+
       M.void $ traverse runSender' rands
 
   where
     runSender' rand
       = do
-          timestamp  <- IO.liftIO getCurrentMillis
-          let msg = Message (RandomNumber rand) timestamp
-          mapM_ (flip D.P.sendChan msg) sendPorts
-          IO.liftIO $ C.C.threadDelay (secondsToMicroseconds (Seconds 1))
+          msg <- IO.liftIO $ createMessage (RandomNumber rand)
+          mapM_ (\s -> D.P.sendChan s msg) sendPorts
+          IO.liftIO (C.C.threadDelay 500)
 
 runReceiver
-  :: [Message Double]
+  :: [Message]
   -> MessageReceivePort
-  -> D.P.Process ([Message Double], Double)
+  -> D.P.ProcessId
+  -> D.P.Process ([Double], Double)
 
-runReceiver msgs receivePort
+runReceiver msgs receivePort senderPId
   = do
       msg <- D.P.receiveChan receivePort
       case msg of
-        Message (RandomNumber r) tms ->
-          runReceiver (Message r tms : msgs) receivePort
+        Message (RandomNumber _) _ ->
+          runReceiver (msg : msgs) receivePort senderPId
 
-        Message StopWork _ ->
-          let ordered = L.sortBy
-                (\(Message _ tms1) (Message _ tms2) -> compare tms1 tms2)
-                msgs
+        Message StopWork _ -> do
+          D.P.kill senderPId "Stop work received"
+          msgs' <- receiveAnyMessagesLeft []
+          let filtered = Mb.catMaybes (f <$> msgs <> msgs')
+              f (Message (RandomNumber r) tms) = Just (tms, r)
+              f _ = Nothing
 
-              total = foldl (\r (Message r' _) -> r + r') 0 msgs
+              ordered = L.sortBy (\(tms1, _) (tms2, _) -> compare tms1 tms2) filtered
+              total = foldl sumNums 0 filtered
+              sumNums r (_, d) = r + d
 
-          in pure (ordered, total)
+          pure (fmap snd ordered, total)
 
-        Message _ _ -> runReceiver msgs receivePort
+        _ ->
+          runReceiver msgs receivePort senderPId
+
+  where
+    receiveAnyMessagesLeft msgsReceived
+      = do
+          r <- D.P.receiveChanTimeout 0 receivePort
+          case r of
+            Just msg -> receiveAnyMessagesLeft (msg : msgsReceived)
+            Nothing -> pure msgsReceived
+
+createMessage :: Payload -> IO Message
+createMessage pl
+  = do
+      tms <- getCurrentMillis
+      pure (Message pl tms)
 
 createNode :: Endpoint -> IO D.P.N.LocalNode
 createNode endpoint@(Endpoint h p)

@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module CliParser
-  ( parseArgs
+  ( parseArgsOrFail
   ) where
 
 import Types
@@ -14,23 +14,42 @@ import qualified Data.NonEmpty           as NE
 import           Data.NonEmpty           ((!:))
 import qualified Data.List               as L
 import qualified Data.Maybe              as Mb
+import           Data.Monoid             ((<>))
 import qualified Data.Set                as Set
 import qualified Data.Semigroup          as Semi
 import qualified Data.Text               as Tx
 import qualified System.Directory        as S.D
 import qualified System.Environment      as S.E
+import qualified System.Exit             as S.Ex
 import qualified System.IO               as S.IO
 import qualified Text.Read               as Tx.R
 
-parseArgs :: IO (V.AccValidation (L.NE.NonEmpty ConfigError) Config)
-parseArgs
+parseArgsOrFail :: IO Config
+parseArgsOrFail
   = do
       args <- S.E.getArgs
       case args of
-        [] -> pure $ V.AccFailure (EmptyArgumentList :| [])
-        args' -> parseArgs' args'
+        [] -> handleValidation (V.AccFailure (EmptyArgumentList :| []))
+        args' -> do
+          res <- parseArgs' args'
+          handleValidation res
 
   where
+    handleValidation v
+      = case v of
+          V.AccFailure e -> do
+            putStrLn ("Failed with " <> show e <> "\n")
+            putStrLn usage
+            S.Ex.exitFailure
+
+          V.AccSuccess s -> pure s
+
+    usage = "Usage:\n\
+            \  --send-for      <number>   number of seconds to run for\n\
+            \  --wait-for      <number>   number of seconds to wait once nodes stop sending\n\
+            \  --with-seed     <number>   the seed to use for random number generation\n\
+            \  [--node-file]   <file>     optional filepath for nodes config (default = nodes.conf)"
+
     parseArgs' args
       = buildConfig $ (,,,) <$>
           parseMaybe "--node-file" (pure . File) args <*>

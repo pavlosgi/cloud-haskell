@@ -12,11 +12,11 @@ module Types
   , Payload (..)
   ) where
 
-import qualified Data.Binary      as B
-import qualified Data.NonEmpty    as NE
-import qualified Data.Set         as Set
-import qualified Data.Text        as Tx
-import           GHC.Generics     (Generic)
+import qualified Data.Binary                 as B
+import qualified Data.NonEmpty               as NE
+import qualified Data.Set                    as Set
+import qualified Data.Text                   as Tx
+import           GHC.Generics                (Generic)
 
 data Config
   = Config
@@ -61,20 +61,20 @@ data ConfigError
 type NonEmptySet a
   = NE.T Set.Set a
 
-data Message a
+data Message
   = Message
-      { mPayload :: !a
+      { mPayload :: !Payload
       , mSentAt  :: !Integer
       }
 
   deriving (Eq, Generic, Show)
 
-instance B.Binary a => B.Binary (Message a)
+instance B.Binary Message
 
 data Payload
-  = RandomNumber !Double
-  | StartWork
+  = StartWork
   | StopWork
+  | RandomNumber !Double
   deriving (Eq, Generic, Show)
 
 instance B.Binary Payload
