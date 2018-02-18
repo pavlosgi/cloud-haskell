@@ -6,11 +6,17 @@ executable:
   source-dirs: src
   dependencies:
     - base
+    - binary
     - containers
     - directory
+    - distributed-process
     - lens
+    - mtl
     - network-transport-tcp
+    - network-transport
     - non-empty
+    - random
     - semigroups
     - text
+    - time
     - validation
