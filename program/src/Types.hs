@@ -7,6 +7,7 @@ module Types
   , endpointToText
   , File (..)
   , Seconds (..)
+  , secondsToMicroseconds
   , Seed (..)
   , ConfigError (..)
   , NonEmptySet
@@ -50,6 +51,10 @@ newtype File
 newtype Seconds
   = Seconds { _secondsInt :: Int }
   deriving (Eq, Show)
+
+secondsToMicroseconds :: Seconds -> Int
+secondsToMicroseconds (Seconds s)
+  = s * 1000000
 
 newtype Seed
   = Seed { _seedInt :: Int }

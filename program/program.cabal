@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: c11f791e143df8b59e8d25579c40b99776ad0cd52667be0e85313a63b4a6352a
+-- hash: 94afd96a8d931b4ac68b39a9fda14e34ffba6d632d3357c3c6fe06ff5f6d9db8
 
 name:           program
 version:        0.0.1
@@ -32,6 +32,7 @@ executable program
     , validation
   other-modules:
       CliParser
+      Nodes
       Types
       Paths_program
   default-language: Haskell2010

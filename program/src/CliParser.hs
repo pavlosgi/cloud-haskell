@@ -30,16 +30,13 @@ parseArgs
         [] -> pure $ V.AccFailure (EmptyArgumentList :| [])
         args' -> parseArgs' args'
 
-parseArgs'
-  :: [String]
-  -> IO (V.AccValidation (L.NE.NonEmpty ConfigError) Config)
-
-parseArgs' args
-  = buildConfig $ (,,,) <$>
-      parseMaybe "--node-file" (pure . File) args <*>
-      parse "--send-for" mkSeconds args <*>
-      parse "--wait-for" mkSeconds args <*>
-      parse "--with-seed" mkSeed args
+  where
+    parseArgs' args
+      = buildConfig $ (,,,) <$>
+          parseMaybe "--node-file" (pure . File) args <*>
+          parse "--send-for" mkSeconds args <*>
+          parse "--wait-for" mkSeconds args <*>
+          parse "--with-seed" mkSeed args
 
 mkSeconds :: Tx.Text -> V.AccValidation (L.NE.NonEmpty ConfigError) Seconds
 mkSeconds str
